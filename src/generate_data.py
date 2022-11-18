@@ -1,10 +1,18 @@
-import spacy
-import random
-import pandas as pd
 import json
+import random
+import os
+
+import spacy
+import typer
+
+from tqdm import tqdm
+from enum import Enum
 
 from datasets import load_dataset, Dataset
 from transformers import AutoModelWithLMHead, AutoTokenizer
+
+Strategy = Enum('Strategy', ['NOUNS', 'WORDS', 'SENTENCES'])
+CLI = typer.Typer()
 
 tokenizer = AutoTokenizer.from_pretrained(
     "mrm8488/t5-base-finetuned-question-generation-ap")
@@ -26,7 +34,7 @@ def get_question(answer, context, max_length=64):
     return tokenizer.decode(output[0]).replace("<pad> question: ", ""). replace("</s>", "")
 
 
-def generate_candidates(doc):
+def generate_candidates_nouns(doc):
     candidates = []
     # Heuristic for selection
     for token in doc:
@@ -34,8 +42,15 @@ def generate_candidates(doc):
             candidates.append(token.text)
     return list(set(candidates))
 
+def generate_candidates_words(doc):
+    candidates = []
+    # Heuristic for selection
+    for token in doc:
+        if token.pos_ == "NOUN" or token.pos_ == "ADJ" or token.pos_ == "VERB":
+            candidates.append(token.text)
+    return list(set(candidates))
 
-def generate_candidates_sent(doc):
+def generate_candidates_sentences(doc):
     candidates = []
     # Heuristic for selection
     for sent in doc.sents:
@@ -50,15 +65,14 @@ def generate_distractors(answer, candidates):
     return options
 
 
-def process_doc_race(article, doc, questions_per_doc=2):
+def process_doc_race(article, doc, questions_per_doc, strategy):
     # Heuristic for answer generation
-    candidates = generate_candidates(doc)
+
+    candidates = globals()[f"generate_candidates_{strategy.lower()}"](doc)
     random.shuffle(candidates)
 
     new_docs = []
     new_id = "SYNT.txt"
-
-    new_docs = []
 
     try:
         for answer in candidates[:questions_per_doc]:
@@ -73,23 +87,38 @@ def process_doc_race(article, doc, questions_per_doc=2):
                 'options': options
             })
     except Exception as exc:
+        print(exc)
         pass
 
     return new_docs
 
 
-def generate_new_docs_race(example_ds, questions_per_doc=2, save=False):
-    new_docs = []
-    articles = list(set(example_ds["article"]))
+CLI.command()
+def race(save: str, n_race_samples: int = 4, questions_per_doc = 5, strategy: Strategy='NOUNS'):
+    ds = Dataset.from_pandas(load_dataset('race', 'middle', split='train').to_pandas().head(n_race_samples)).sort('example_id')
+    
+    articles = list(set(ds["article"]))
     docs = list(nlp.pipe(articles))
-    n_docs = len(docs)
-    for i in range(0, n_docs):
+
+    print(f"Generating synthetic data from {n_race_samples} RACE samples")
+    print(f"At a rate of {questions_per_doc} questions-answer-distractor pairs per doc")
+    print(f"Following the strategy {strategy}")
+
+
+    print(f"")
+    new_docs = []
+    for article, doc in tqdm(zip(articles, docs)):
         new_docs = [
-            *new_docs, *process_doc_race(articles[i], docs[i], questions_per_doc=questions_per_doc)]
+            *new_docs, *process_doc_race(article, doc, questions_per_doc, strategy)]
 
     if save is not None:
+        if not os.path.exists(save):
+            os.makedirs(save)
+
         try:
-            with open(f"{save}.json", 'w') as f:
+            with open(f"{save}/all_data.json", 'w') as f:
+                f.write(json.dumps([*ds.to_pandas().to_json(orient='records'), *new_docs]))
+            with open(f"{save}/synthetic_data.json", 'w') as f:
                 f.write(json.dumps(new_docs))
         except Exception as exc:
             print(exc)
@@ -97,8 +126,5 @@ def generate_new_docs_race(example_ds, questions_per_doc=2, save=False):
     print(f"Generated {len(new_docs)}")
 
 
-if __name__ == '__main__':
-    Dataset.from_pandas(load_dataset(
-        'race', 'middle', split='train').to_pandas().head(10000)).sort('example_id')
-    generate_new_docs_race(
-        example_ds, questions_per_doc=4, save=SAVE_PATH_RACE)
+if __name__ == "__main__":
+    CLI()
