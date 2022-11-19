@@ -18,6 +18,19 @@ with different combinations of real and synthetic data. Expanded tests are carri
 
 Most code has been developed making use of 🤗 Pipelines and hosted models.
 
+# Data Generation Scripts
+
+Under `src/generate_data.py` we've added a script to generate the synthetic data.
+You need to provide it with a destination folder
+To run it (in /src/)
+
+```
+$ python -m pip install -r requirements.txt
+$ python generate_data.py save_folder n_samples questions_per_doc strategy
+```
+
+For more info you can do `python generate_data.py --help`
+
 # Objectives
 
 The main objectives of this work are to evaluate methods to automatically generate Multiple Choice collections and help evaluate their contribution to improve current systems. To this end we will work towards the following objectives:
