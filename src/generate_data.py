@@ -8,6 +8,7 @@ from tqdm import tqdm
 from enum import Enum
 from importlib import import_module
 from spacy.cli import download
+from typing import Optional
 
 from datasets import load_dataset, Dataset
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
@@ -113,7 +114,13 @@ def process_doc_race(article, doc, questions_per_doc, strategy):
 
 
 @CLI.command()
-def race(save: str, n_race_samples: int = 8, questions_per_doc: int = 5, strategy: Strategy = Strategy.nouns):
+def race(
+    save: str,
+    n_race_samples: Optional[int] = typer.Argument(8),
+    questions_per_doc: Optional[int] = typer.Argument(5),
+    strategy: Optional[Strategy] = typer.Argument(Strategy.nouns),
+):
+    print("Loading RACE dataset...")
     ds = Dataset.from_pandas(load_dataset("race", "middle", split="train").to_pandas().head(n_race_samples)).sort(
         "example_id"
     )
