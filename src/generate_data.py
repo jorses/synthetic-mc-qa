@@ -1,6 +1,7 @@
 import json
 import random
 import os
+import logging
 
 import typer
 
@@ -10,8 +11,12 @@ from importlib import import_module
 from spacy.cli import download
 from typing import Optional
 
-from datasets import load_dataset, Dataset
+
+from datasets import load_dataset
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+# TODO: sort out version compatibilities so deprecation warning for xla_device is not present
+logging.getLogger("transformers").setLevel(logging.ERROR) 
 
 
 class Strategy(str, Enum):
@@ -116,19 +121,19 @@ def process_doc_race(article, doc, questions_per_doc, strategy):
 @CLI.command()
 def race(
     save: str,
-    n_race_samples: Optional[int] = typer.Argument(8),
+    n_race_docs: Optional[int] = typer.Argument(8),
     questions_per_doc: Optional[int] = typer.Argument(5),
     strategy: Optional[Strategy] = typer.Argument(Strategy.nouns),
 ):
+    print("***********************")
     print("Loading RACE dataset...")
-    ds = Dataset.from_pandas(load_dataset("race", "middle", split="train").to_pandas().head(n_race_samples)).sort(
-        "example_id"
-    )
 
-    articles = list(set(ds["article"]))
+    df = load_dataset("race", "middle", split="train").sort("example_id").to_pandas().reset_index()
+    articles = list(df["article"].unique())[:n_race_docs]
+    df = df.head(df[df["article"] == articles[-1]].index[-1])
     docs = list(nlp.pipe(articles))
 
-    print(f"Generating synthetic data from {n_race_samples} RACE samples")
+    print(f"Generating synthetic data from {n_race_docs} RACE samples")
     print(f"At a rate of {questions_per_doc} questions-answer-distractor tuples per doc")
     print(f"Following the strategy {strategy}")
 
@@ -142,13 +147,14 @@ def race(
 
         try:
             with open(f"{save}/all_data.json", "w") as f:
-                f.write(json.dumps([*json.loads(ds.to_pandas().to_json(orient="records")), *new_docs]))
+                f.write(json.dumps([*json.loads(df.to_json(orient="records")), *new_docs]))
             with open(f"{save}/synthetic_data.json", "w") as f:
                 f.write(json.dumps(new_docs))
         except Exception as exc:
             print(exc)
 
-    print(f"Generated {len(new_docs)}")
+    print(f"Generated {len(new_docs)} synthetic samples")
+    print(f"From {df.shape[0]} RACE rows, {n_race_docs} unique documents")
 
 
 if __name__ == "__main__":
