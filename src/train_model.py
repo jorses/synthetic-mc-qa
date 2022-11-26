@@ -1,18 +1,28 @@
-import torch
 import logging
+import torch
+import typer
+
 import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
-from typing import Optional, Union
 from functools import partial
+from typing import Optional, Union
 
-from datasets import ClassLabel, Dataset
+from datasets import ClassLabel, Dataset, load_dataset
 from transformers import AutoModelForMultipleChoice, TrainingArguments, Trainer, AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase, PaddingStrategy
 
 # TODO: sort out version compatibilities so deprecation warning for xla_device is not present
 logging.getLogger("transformers").setLevel(logging.ERROR)
+CLI = typer.Typer()
+
+logger = logging.getLogger("race_runs")
+logger.setLevel(logging.INFO)
+# create file handler which logs even debug messages
+fh = logging.FileHandler("race_run.log")
+fh.setLevel(logging.INFO)
+logger.addHandler(fh)
 
 
 @dataclass
@@ -112,9 +122,8 @@ def get_baseline_acc(model_name, tokenized_ds):
         compute_metrics=compute_metrics,
     )
     output = trainer.predict(tokenized_ds)
-    print(f"Baseline accuracy for {model_name}")
-    print(acc(tokenized_ds["labels"], [np.argmax(x) for x in output.predictions]))
-    # return output
+    logger.info(f"Baseline accuracy for {model_name}")
+    logger.info(acc(tokenized_ds["labels"], [np.argmax(x) for x in output.predictions]))
 
 
 def compute_metrics(eval_predictions):
@@ -127,16 +136,25 @@ def acc(labels, predictions):
     return sum([l == p for l, p in zip(labels, predictions)]) / len(predictions)
 
 
-if __name__ == "__main__":
+def run_experiment(task: str, load_path: str, model: str):
+    tokenizer_bert = AutoTokenizer.from_pretrained(model, use_fast=True, do_lower_case=True, truncation=True)
 
-    tokenizer_bert = AutoTokenizer.from_pretrained(
-        "bert-base-uncased", use_fast=True, do_lower_case=True, truncation=True
+    ds = pd.read_json(open(f"{load_path}/{task}.json"))
+
+    tokenized_train = preprocess_dataset(Dataset.from_pandas(ds), tokenizer_bert)
+
+
+    race_validate = load_dataset("race", "middle", split="validation")
+    race_test = load_dataset("race", "middle", split="test")
+
+    tokenized_race_test = preprocess_dataset(race_test, tokenizer_bert)
+    tokenized_race_validate = Dataset.from_pandas(
+        Dataset.to_pandas(preprocess_dataset(race_validate, tokenizer_bert)).head(1000)
     )
 
-    ds = pd.read_json(open("./samples/all_data.json"))
-    ds["example_id"] = ds["id"]
-    del ds["id"]
-    tokenized_all = preprocess_dataset(Dataset.from_pandas(ds), tokenizer_bert)
+    logger.info("Proceeding to training with ")
+    logger.info(f"{tokenized_race_validate.shape[0]} RACE samples")
+    logger.info(f"{tokenized_train.shape[0]}")
 
     training_args = TrainingArguments(
         **{
@@ -153,23 +171,15 @@ if __name__ == "__main__":
             "gradient_accumulation_steps": 8,
             "learning_rate": 5.0e-05,
             "warmup_steps": 500,
-            "output_dir": "/content/drive/MyDrive/TFM/models/results5k_5ksynth",
+            "output_dir": "./model_runs",
             "eval_steps": 100,
         }
-    )
-
-    race_validate = Dataset.load_dataset("race", "middle", split="validation")
-    race_test = Dataset.load_dataset("race", "middle", split="test")
-
-    tokenized_race_test = preprocess_dataset(race_test, tokenizer_bert)
-    tokenized_race_validate = Dataset.from_pandas(
-        Dataset.to_pandas(preprocess_dataset(race_validate, tokenizer_bert)).head(1000)
     )
 
     bert_base = Trainer(
         model=AutoModelForMultipleChoice.from_pretrained("bert-base-uncased"),
         args=training_args,
-        train_dataset=tokenized_all,
+        train_dataset=tokenized_train,
         eval_dataset=tokenized_race_validate,
         data_collator=DataCollatorForMultipleChoice(tokenizer=tokenizer_bert),
         compute_metrics=compute_metrics,
@@ -178,4 +188,53 @@ if __name__ == "__main__":
     bert_base.train()
 
     output = bert_base.predict(tokenized_race_test)
-    acc(tokenized_race_test["labels"], [np.argmax(x) for x in output.predictions])
+    accuracy = acc(tokenized_race_test["labels"], [np.argmax(x) for x in output.predictions])
+    logger.info(f"Experiment yielded accuracy {accuracy}")
+
+
+def prologue(task, load_path, model):
+    logger.info("****************************************************")
+    logger.info(f"Running experiment for {task} samples for ")
+    logger.info(f"Data in {load_path} and model {model}")
+    logger.info("****************************************************")
+
+
+@CLI.command()
+def synth(
+    load_path: str,
+    model: Optional[str] = typer.Argument("bert-base-uncased"),
+):
+    prologue("synth", load_path, model)
+    run_experiment("synth", load_path, model)
+
+
+@CLI.command()
+def real(
+    load_path: str,
+    model: Optional[str] = typer.Argument("bert-base-uncased"),
+):
+    prologue("real", load_path, model)
+    run_experiment("real", load_path, model)
+
+
+@CLI.command()
+def both(
+    load_path: str,
+    model: Optional[str] = typer.Argument("bert-base-uncased"),
+):
+    prologue("both", load_path, model)
+    run_experiment("both", load_path, model)
+
+
+@CLI.command()
+def all(
+    load_path: str,
+    model: Optional[str] = typer.Argument("bert-base-uncased"),
+):
+    synth(load_path, model)
+    real(load_path, model)
+    both(load_path, model)
+
+
+if __name__ == "__main__":
+    CLI()

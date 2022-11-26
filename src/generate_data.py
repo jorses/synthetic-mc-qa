@@ -146,9 +146,11 @@ def race(
             os.makedirs(save)
 
         try:
-            with open(f"{save}/all_data.json", "w") as f:
+            with open(f"{save}/real.json", "w") as f:
+                f.write(json.dumps(json.loads(df.to_json(orient="records"))))
+            with open(f"{save}/both.json", "w") as f:
                 f.write(json.dumps([*json.loads(df.to_json(orient="records")), *new_docs]))
-            with open(f"{save}/synthetic_data.json", "w") as f:
+            with open(f"{save}/synth.json", "w") as f:
                 f.write(json.dumps(new_docs))
         except Exception as exc:
             print(exc)
