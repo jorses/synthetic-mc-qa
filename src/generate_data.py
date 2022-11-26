@@ -133,11 +133,10 @@ def race(
 
     # if not enough, take from the front
     originals = df["article"].unique().tolist()
-    n_articles = len(originals)
     articles = (originals * 2)[slice(initial_id, n_race_docs)]
 
-    last_idx = -1 if n_race_docs + initial_id < n_articles else n_articles - initial_id - 1
-    df = df.head(df[df["article"] == articles[last_idx]].index[-1])
+    # TODO: if slow can be optimized further: save original indexes of docs, then slice
+    df = df[df["article"].isin(articles)]
     docs = list(nlp.pipe(articles))
 
     print(f"Generating synthetic data from {n_race_docs} RACE samples")
