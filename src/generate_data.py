@@ -16,7 +16,7 @@ from datasets import load_dataset
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 # TODO: sort out version compatibilities so deprecation warning for xla_device is not present
-logging.getLogger("transformers").setLevel(logging.ERROR) 
+logging.getLogger("transformers").setLevel(logging.ERROR)
 
 
 class Strategy(str, Enum):
@@ -124,12 +124,16 @@ def race(
     n_race_docs: Optional[int] = typer.Argument(8),
     questions_per_doc: Optional[int] = typer.Argument(5),
     strategy: Optional[Strategy] = typer.Argument(Strategy.nouns),
+    initial_id: Optional[int] = typer.Argument(0),
 ):
     print("***********************")
     print("Loading RACE dataset...")
 
     df = load_dataset("race", "middle", split="train").sort("example_id").to_pandas().reset_index()
-    articles = list(df["article"].unique())[:n_race_docs]
+
+    # if not enough, take from the front
+    articles = (df["article"].unique().tolist() * 2)[initial_id : (n_race_docs + initial_id)]
+
     df = df.head(df[df["article"] == articles[-1]].index[-1])
     docs = list(nlp.pipe(articles))
 
