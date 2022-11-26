@@ -18,18 +18,21 @@ with different combinations of real and synthetic data. Expanded tests are carri
 
 Most code has been developed making use of 🤗 Pipelines and hosted models.
 
-# Data Generation Scripts
+# Experiment Scripts
 
 Under `src/generate_data.py` we've added a script to generate the synthetic data.
-You need to provide it with a destination folder
+You need to provide it with a destination folder.
+
 To run it (in /src/)
 
 ```
 $ python -m pip install -r requirements.txt
 $ python generate_data.py save_folder n_samples questions_per_doc strategy
+$ python run_experiment.py save_folder all
+
 ```
 
-For more info you can do `python generate_data.py --help`
+For more info you can do `python generate_data.py --help` or `python run_experiment.py --help`
 
 # Objectives
 

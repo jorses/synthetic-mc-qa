@@ -132,9 +132,12 @@ def race(
     df = load_dataset("race", "middle", split="train").sort("example_id").to_pandas().reset_index()
 
     # if not enough, take from the front
-    articles = (df["article"].unique().tolist() * 2)[initial_id : (n_race_docs + initial_id)]
+    originals = df["article"].unique().tolist()
+    n_articles = len(originals)
+    articles = (originals * 2)[slice(initial_id, n_race_docs)]
 
-    df = df.head(df[df["article"] == articles[-1]].index[-1])
+    last_idx = -1 if n_race_docs + initial_id < n_articles else n_articles - initial_id - 1
+    df = df.head(df[df["article"] == articles[last_idx]].index[-1])
     docs = list(nlp.pipe(articles))
 
     print(f"Generating synthetic data from {n_race_docs} RACE samples")
