@@ -60,10 +60,10 @@ class DataCollatorForMultipleChoice:
 
 
 # Preprocess
-
 MAX_LEN = 512
 NUM_LABELS = 4
 label_map = {"A": 0, "B": 1, "C": 2, "D": 3}
+
 # RACE
 RACE_DIR = "/content/drive/MyDrive/TFM/RACE_DATASET/output_dir/RACE"
 
@@ -177,7 +177,7 @@ def run_experiment(task: str, load_path: str, model: str):
     )
 
     bert_base = Trainer(
-        model=AutoModelForMultipleChoice.from_pretrained("bert-base-uncased"),
+        model=AutoModelForMultipleChoice.from_pretrained(model),
         args=training_args,
         train_dataset=tokenized_train,
         eval_dataset=tokenized_race_validate,
