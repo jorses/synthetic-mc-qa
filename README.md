@@ -28,7 +28,7 @@ To run it (in /src/)
 ```
 $ python -m pip install -r requirements.txt
 $ python generate_data.py save_folder n_samples questions_per_doc strategy
-$ python run_experiment.py save_folder all
+$ python run_experiment.py all save_folder
 
 ```
 
