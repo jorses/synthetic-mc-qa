@@ -133,7 +133,7 @@ def race(
 
     # if not enough, take from the front
     originals = df["article"].unique().tolist()
-    articles = (originals * 2)[initial_id, initial_id + n_race_docs]
+    articles = (originals * 2)[initial_id: initial_id + n_race_docs]
 
     # TODO: if slow can be optimized further: save original indexes of docs, then slice
     df = df[df["article"].isin(articles)]
